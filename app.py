@@ -2,33 +2,24 @@
 import os
 
 from aws_cdk import core as cdk
-
-# For consistency with TypeScript code, `cdk` is the preferred import name for
-# the CDK's core module.  The following line also imports it as `core` for use
-# with examples from the CDK Developer's Guide, which are in the process of
-# being updated to use `cdk`.  You may delete this import if you don't need it.
-from aws_cdk import core
-
-from cdk_serverless_app.cdk_serverless_app_stack import CdkServerlessAppStack
+from cdk.layer_stack import Layer
+from cdk.basic_role_stack import BasicRole
+from cdk.lib.construct import Authorizer
 
 
-app = core.App()
-CdkServerlessAppStack(app, "CdkServerlessAppStack",
-    # If you don't specify 'env', this stack will be environment-agnostic.
-    # Account/Region-dependent features and context lookups will not work,
-    # but a single synthesized template can be deployed anywhere.
+app = cdk.App()
 
-    # Uncomment the next line to specialize this stack for the AWS Account
-    # and Region that are implied by the current CLI configuration.
+init_stack = cdk.Stack(app, 'init')
+layer = Layer(init_stack, 'layers')
+basic_role = BasicRole(init_stack, 'roles')
 
-    #env=core.Environment(account=os.getenv('CDK_DEFAULT_ACCOUNT'), region=os.getenv('CDK_DEFAULT_REGION')),
-
-    # Uncomment the next line if you know exactly what Account and Region you
-    # want to deploy the stack to. */
-
-    #env=core.Environment(account='123456789012', region='us-east-1'),
-
-    # For more information, see https://docs.aws.amazon.com/cdk/latest/guide/environments.html
-    )
+authorizer_stack = cdk.Stack(app, 'authorizer')
+fn_auth = Authorizer(
+    authorizer_stack,
+    f'authorizer-id',
+    env={'abcd': 'def'},
+    layers=[layer.jwt_layer],
+    role=basic_role.basic_lambda_role
+)
 
 app.synth()
