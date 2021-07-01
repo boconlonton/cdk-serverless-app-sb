@@ -3,13 +3,16 @@ This module defines helper decorators
 """
 
 
-def middleware(fn):
-    """This decorator is used for implement any action
-    before processing the API"""
-    def inner(*args, **kwargs):
-        print('before execution')
-        response = fn(*args, **kwargs)
-        print(response.get('status_code'))
-        print('after execution')
-        return response
+def middleware(*args, **kwargs):
+    def inner(fn):
+        """This decorator is used for implement any action
+        before processing the API"""
+        def wrapper(*args, **kwargs):
+            print('before execution')
+            print(args)
+            print(kwargs)
+            response = fn(*args, **kwargs)
+            print('after execution')
+            return response
+        return wrapper
     return inner
