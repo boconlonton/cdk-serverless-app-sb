@@ -3,8 +3,12 @@ from miracle.euni import Abstract
 
 
 class User(Abstract):
-    first_name = models.CharField(name='fname', max_length=30,
-                                  min_length=10, default='Tan')
+    first_name = models.CharField(
+        name='fname',
+        max_length=30,
+        min_length=10,
+        default='Tan'
+    )
     last_name = models.CharField(max_length=30, nullable=False)
 
     class Meta:

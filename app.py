@@ -8,7 +8,7 @@ from cdk.basic_role_stack import BasicRole
 from cdk.lib.construct import Authorizer
 from cdk.lib.construct import API
 
-from lambdas.users.views import url as user_views
+from src.users.views import url as user_views
 
 app = cdk.App()
 
