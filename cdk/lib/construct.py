@@ -18,14 +18,13 @@ from settings.dev import RESPONSE_5XX
 
 class Authorizer(cdk.Construct):
     """
-    This class defines CDK Construct for a Lambda-authorizer
+    This class defines the constructor for a Lambda-authorizer
     """
 
     def __init__(self,
                  scope: cdk.Construct,
                  construct_id: str,
                  *,
-                 module_name: str,
                  env: Mapping[str, str],
                  layers: List[function.LayerVersion],
                  role: iam.Role,
@@ -39,21 +38,22 @@ class Authorizer(cdk.Construct):
         Args:
             scope (Stack): specify which stack this resource belongs to
             construct_id (str): the unique id for the resource
-            module_name (str): specify which module this resource belong to
             env (dict): specify the environment for this AWS Lambda function
-            layers (list): specify the
-            role:
-            timeout:
-            handler:
-            runtime:
-            code:
+            layers (list): specify the Lambda layer for the authorizer
+            role (iam.Role): specify an IAM role for the authorizer
+            timeout (cdk.Duration): set the maximum timeout, default=10s
+            handler (str): specify which function is the handler inside the package,
+                default=authorizer.handler
+            runtime (function.Runtime): specify the runtime of the authorizer
+                default=PYTHON_3_7
+            code (str): specify the location of the authorizer function
         """
         super().__init__(scope, construct_id)
 
         self.handler = function.Function(
             self,
             id=construct_id,
-            function_name=f'{module_name}-authorizer',
+            function_name=f'lambda-authorizer',
             runtime=runtime,
             code=code,
             handler=handler,
@@ -75,28 +75,30 @@ class Handler(cdk.Construct):
                  *,
                  module_name: str,
                  fn_name: str,
+                 handler: str,
                  env: Mapping[str, str],
                  layers: List[function.LayerVersion],
                  role: iam.Role,
                  code_location: str,
                  timeout: cdk.Duration = cdk.Duration.seconds(10),
-                 handler: str = 'authorizer.handler',
                  runtime: function.Runtime = function.Runtime.PYTHON_3_7,
                  ):
         """
 
         Args:
-            scope (Stack): specify which stack this resource belongs to
+            scope (cdk.Stack): specify which stack this resource belongs to
             construct_id (str): the unique id for the resource
             module_name (str): specify which module this resource belong to
             fn_name (str): specify the file name of the handler
+            handler (str): specify which is the handler inside function package
             env (dict): specify the environment for this AWS Lambda function
-            layers (list): specify the
-            role:
-            timeout:
+            layers (List[function.LayerVersion]): specify the layers for all functions of this API
+            role (iam.Role): specify the IAM role for all functions of this API
+            timeout (cdk.Duration): specify the function timeout for all funcitons of this API
+                default=10
             handler:
             runtime:
-            code:
+            code_location:
         """
         super().__init__(scope, construct_id)
 
@@ -128,6 +130,7 @@ class API(cdk.Construct):
                  layers: List[function.LayerVersion],
                  role: iam.Role,
                  env: dict,
+                 views: dict,
                  authorizer: function.Function = None,
                  endpoint_types: List[api.EndpointType] = api.EndpointType.REGIONAL,
                  headers: Mapping[str, str] = HEADER,
@@ -155,6 +158,7 @@ class API(cdk.Construct):
         self._layers = layers
         self._role = role
         self._env = env
+        self._views = views
 
         self.root_node = api.RestApi(
             self,
@@ -192,7 +196,7 @@ class API(cdk.Construct):
             )
 
         # ENABLE CORS
-        cors = function.Function(
+        self.cors = function.Function(
             self,
             id=f'{module_name}-cors',
             function_name=f"{module_name}-cors",
@@ -228,7 +232,7 @@ class API(cdk.Construct):
             domain_name_alias_target=APIGW_DOMAIN_NAME,
         )
 
-        mapping = api.CfnBasePathMapping(
+        api.CfnBasePathMapping(
             self,
             id=f'{module_name}-mapping',
             domain_name=domain.domain_name,
@@ -237,23 +241,16 @@ class API(cdk.Construct):
             stage=stage.stage_name,
         )
 
-    def __call__(self, *, data, **kwargs):
-        """
+    def __call__(self, **kwargs):
+        self._handlers = {}
 
-        Args:
-            data:
-            **kwargs:
-
-        Returns:
-
-        """
         # MODULE CODE
         root_directory = f'lambdas/{self._module_name}'
 
         # LOOP TO PROVISION LAMBDA FUNCTIONS OF MODULE
-        for endpoint, metadata in data.items():
+        for endpoint, metadata in self._views.items():
 
-            path = f'{root_directory}/{endpoint}'
+            path = f'{root_directory}/src/{endpoint}'
 
             # UPDATE LAMBDA FUNCTION ENVIRONMENT
             if kwargs.get(endpoint):
@@ -262,11 +259,12 @@ class API(cdk.Construct):
                 self._env.update(metadata['environment'])
 
             # DECLARE LAMBDA FUNCTION
-            handler = Handler(
+            self._handlers[endpoint] = Handler(
                 self,
                 construct_id=f'{self._module_name}-{endpoint}',
                 module_name=self._module_name,
                 fn_name=endpoint,
+                handler=f'{endpoint}.handler',
                 env=self._env,
                 layers=self._layers,
                 role=self._role,
@@ -285,7 +283,7 @@ class API(cdk.Construct):
 
             api_endpoint.add_method(
                 http_method=metadata.get('method'),
-                integration=api.LambdaIntegration(handler),
+                integration=api.LambdaIntegration(self._handlers[endpoint]),
                 authorizer=self._api_auth,
             )
 

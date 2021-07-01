@@ -1,5 +1,5 @@
 """
-This module defines the default template for API Gateway respons
+This module defines the configurations for develop environment
 """
 
 # GENERAL SETTINGS
